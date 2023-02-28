@@ -1,0 +1,9 @@
+
+
+info:
+  system: Yello Pepper System
+  app:
+    name: Transaction Service
+    description:
+    version: "0.0.1-SNAPSHOT"
+    java-vendor: ${java.specification.vendor}

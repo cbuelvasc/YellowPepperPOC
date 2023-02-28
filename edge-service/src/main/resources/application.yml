@@ -1,0 +1,99 @@
+server:
+  port: 9000
+  netty:
+    connection-timeout: 2s
+    idle-timeout: 15s
+  shutdown: graceful
+
+spring:
+  application:
+    name: edge-service
+  lifecycle:
+    timeout-per-shutdown-phase: 15s
+  config:
+    import: "" # When using Config Service, add "optional:configserver:"
+  cloud:
+    bootstrap:
+      enabled: true
+    config:
+      enabled: false # When using Config Service, set to true
+    gateway:
+      httpclient:
+        connect-timeout: 2000 # 2s
+        response-timeout: 5s
+        pool:
+          type: elastic
+          max-idle-time: 15s
+          max-life-time: 60s
+      default-filters:
+        - SaveSession
+        - TokenRelay
+      routes:
+        - id: test-route
+          uri: ${TRANSACTION_SERVICE_URL:http://localhost:9001}/api/transaction-service
+          #uri: http://transaction-service:9001/api/transaction-service
+          predicates:
+            - Path=/api/transaction-service/**
+          filters:
+            #- RewritePath=/license/(?<path>.*), /$\{path}
+            - RemoveRequestHeader= Cookie,Set-Cookie
+  data:
+    redis:
+      connect-timeout: 2s
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: 6379
+      timeout: 1s
+  session:
+    timeout: 10m
+    redis:
+      namespace: yp:edge
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: edge-service
+            client-secret: yellowpepper-keycloak-secret
+            authorizationGrantType: client_credentials
+            #scope: openid,roles
+            redirect-uri: '{baseUrl}/login/oauth2/code/keycloak'
+        provider:
+          keycloak:
+            issuer-uri: http://localhost:8080/realms/YellowPepper
+            #issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8080/realms/YellowPepper}
+            #issuer-uri: http://keycloak:8080/realms/YellowPepper
+
+logging:
+  level:
+    root: debug
+  pattern:
+    level: "%5p [${spring.application.name},%X{trace_id},%X{span_id}]"
+
+info:
+  system: Yellow Pepper
+
+management:
+  endpoints:
+    web:
+      base-path: /admin
+      exposure:
+        include: configprops, env, gateway, health, heapdump, info, loggers, mappings, prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,redis
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

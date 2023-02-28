@@ -1,0 +1,135 @@
+version: "3.8"
+
+services:
+
+  transaction-service:
+    depends_on:
+      - fluent-bit
+      - keycloak
+      - tempo
+    image: "transaction-service"
+    container_name: "transaction-service"
+    ports:
+      - 9001:9001
+      - 8001:8001
+    environment:
+      - BPL_JVM_THREAD_COUNT=50
+      - BPL_DEBUG_ENABLED=true
+      - BPL_DEBUG_PORT=8001
+      - JAVA_TOOL_OPTIONS=-javaagent:/workspace/BOOT-INF/lib/opentelemetry-javaagent-1.19.2.jar
+      - OTEL_SERVICE_NAME=transaction-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
+      - OTEL_METRICS_EXPORTER=none
+      - SPRING_PROFILES_ACTIVE=custom
+      #- SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://host.docker.internal:8080/realms/YellowPepper
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 127.0.0.1:24224
+
+  edge-service:
+    depends_on:
+      - fluent-bit
+      - keycloak
+      - redis
+    image: "edge-service"
+    container_name: "edge-service"
+    ports:
+      - 9000:9000
+      - 8000:8000
+    environment:
+      - BPL_DEBUG_ENABLED=true
+      - BPL_DEBUG_PORT=8000
+      - JAVA_TOOL_OPTIONS=-javaagent:/workspace/BOOT-INF/lib/opentelemetry-javaagent-1.19.2.jar
+      - OTEL_SERVICE_NAME=edge-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4317
+      - OTEL_METRICS_EXPORTER=none
+      #- TRANSACTION_SERVICE_URL=http://transaction-service:9001
+      - SPRING_DATA_REDIS_HOST=redis
+      #- SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_KEYCLOAK_ISSUER_URI=http://host.docker.internal:8080/realms/YellowPepper
+      #- KEYCLOAK_ISSUER=http://host.docker.internal:8080/realms/YellowPepper
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: 127.0.0.1:24224
+
+  redis:
+    image: "redis:7.0"
+    container_name: "redis"
+    ports:
+      - 6379:6379
+
+  redis-commander:
+    container_name: "redis-commander"
+    image: "rediscommander/redis-commander:latest"
+    environment:
+      - "REDIS_HOSTS=local:redis"
+    depends_on:
+      - "redis"
+    ports:
+      - "8081:8081"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:19.0
+    container_name: "keycloak"
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import
+    environment:
+      - KEYCLOAK_ADMIN=user
+      - KEYCLOAK_ADMIN_PASSWORD=password
+    ports:
+      - 8080:8080
+
+  grafana:
+    image: grafana/grafana:9.3.2
+    container_name: grafana
+    depends_on:
+      - loki
+      - prometheus
+      - tempo
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=user
+      - GF_SECURITY_ADMIN_PASSWORD=password
+    volumes:
+      - ./observability/grafana/datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml
+      - ./observability/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./observability/grafana/grafana.ini:/etc/grafana/grafana.ini
+
+  loki:
+    image: grafana/loki:2.7.1
+    container_name: loki
+    depends_on:
+      - fluent-bit
+    ports:
+      - "3100:3100"
+
+  fluent-bit:
+    image: grafana/fluent-bit-plugin-loki:2.7.1-amd64
+    container_name: fluent-bit
+    ports:
+      - "24224:24224"
+    environment:
+      - LOKI_URL=http://loki:3100/loki/api/v1/push
+    volumes:
+      - ./observability/fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+
+  prometheus:
+    image: prom/prometheus:v2.40.7
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+
+  tempo:
+    image: grafana/tempo:1.5.0
+    container_name: tempo
+    command: -config.file /etc/tempo-config.yml
+    ports:
+      - "3110:3100"     # Tempo
+      - "4317:4317"     # OTel
+    volumes:
+      - ./observability/tempo/tempo.yml:/etc/tempo-config.yml

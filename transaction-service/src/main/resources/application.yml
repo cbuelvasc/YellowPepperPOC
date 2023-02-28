@@ -1,0 +1,50 @@
+server:
+  port: 9001
+  shutdown: graceful
+  servlet:
+    context-path: /api/transaction-service
+  tomcat:
+    connection-timeout: 2s
+    keep-alive-timeout: 15s
+    threads:
+      max: 50
+      min-spare: 5
+
+spring:
+  application:
+    name: transaction-service
+  cloud:
+    bootstrap:
+      enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8080/realms/YellowPepper
+          #issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8080/realms/YellowPepper}
+          #issuer-uri: http://keycloak:8080/realms/YellowPepper
+
+logging:
+  #level:
+  #  root: debug
+  pattern:
+    level: "%5p [${spring.application.name},%X{trace_id},%X{span_id}]"
+
+management:
+  endpoints:
+    web:
+      base-path: /admin
+      exposure:
+        include: refresh, configprops, env, health, metrics, heapdump, info, loggers, mappings, prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}

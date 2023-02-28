@@ -1,0 +1,7 @@
+info:
+  system: Yellow Pepper
+  app:
+    name: Edge Service
+    description:
+    version: "0.0.1-SNAPSHOT"
+    java-vendor: ${java.specification.vendor}
